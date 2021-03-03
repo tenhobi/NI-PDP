@@ -1,7 +1,7 @@
 # Homework 1 – sequential solution
 
 | File | Reference time [s] | Time [s] | Reference cost | Cost | Reference number of calls | Number of calls |
-| --- | --- :| --- :| --- :| --- :| --- :| --- :|
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | saj1.txt  |  0.0  | 0.0  | 5  | 5  | 750 | 799 |
 | saj2.txt  |  0.6  | 2.0  | 14 | 14 | 14e+6 | 14,576,526 |
 | saj3.txt  |  0.01 | 0.05 | 12 | 12 |  300e+3 | 301,179 |
