@@ -43,6 +43,9 @@ clean:
 	$(shell find $(SOURCEDIR) -type f -name "*.d" -exec rm {} \;)
 	@echo "$(COLOR_DONE)CLEAN DONE$(COLOR_DEFAULT)"
 
+test: compile
+	$(shell ./bin/test.sh)
+
 ## Inlude D files
 
 -include $(SOURCES:.cpp=.d)
