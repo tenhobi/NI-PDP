@@ -3,6 +3,7 @@
 
 #include <string>
 #include <fstream>
+#include <utility>
 #include <vector>
 #include "Chessboard.hpp"
 
@@ -10,9 +11,17 @@
 #define bishopFigure 'S'
 #define knightFigure 'J'
 
+class ParserOutput {
+public:
+    unsigned long maxDepth;
+    Chessboard chessboard;
+
+    ParserOutput(unsigned long maxDepth, Chessboard chessboard) : maxDepth(maxDepth), chessboard(std::move(chessboard)) {}
+};
+
 class Parser {
 public:
-    Chessboard parse(const std::string &fileName) const {
+    ParserOutput parse(const std::string &fileName) const {
         std::ifstream file(fileName);
         if (!file.is_open()) {
             std::cout << "Error: Couldn't open the input file." << std::endl;
@@ -20,7 +29,7 @@ public:
         }
 
         int chessboardSize;
-        int maxDepth; // TODO: ?
+        unsigned long maxDepth;
 
         file >> chessboardSize >> maxDepth;
 
@@ -34,8 +43,9 @@ public:
             for (int column = 0; column < chessboardSize; column++) {
                 file >> figure;
 
-
-                squares.push_back(figure == enemyFigure);
+                if (figure == enemyFigure) {
+                    squares[Chessboard::coordsToIndex(chessboardSize, Coords(row, column))] = true;
+                }
 
                 switch (figure) {
                     case enemyFigure:
@@ -53,14 +63,11 @@ public:
             }
         }
 
-        return Chessboard(chessboardSize, enemiesCount, squares,
-                          coordsToIndex(chessboardSize, bishopCoords),
-                          coordsToIndex(chessboardSize, knightCoords)
+        return ParserOutput(maxDepth,
+                            Chessboard(chessboardSize, enemiesCount, squares,
+                                       Chessboard::coordsToIndex(chessboardSize, bishopCoords),
+                                       Chessboard::coordsToIndex(chessboardSize, knightCoords))
         );
-    }
-
-    int coordsToIndex(int size, Coords coords) const {
-        return coords.row * size + coords.column;
     }
 };
 

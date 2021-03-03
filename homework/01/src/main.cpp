@@ -11,15 +11,12 @@ int main(int argc, char **argv) {
     }
 
     Parser parser;
-    Solver solver;
-
-    Chessboard chessboard = parser.parse(argv[1]);
-
+    ParserOutput parserOutput = parser.parse(argv[1]);
+    Solver solver(parserOutput.maxDepth);
     // TIMER START
     auto start = std::chrono::high_resolution_clock::now();
 
-    solver.solve(chessboard);
-    solver.printResult();
+    solver.solve(parserOutput.chessboard);
 
     auto finish = std::chrono::high_resolution_clock::now();
     // TIMER END

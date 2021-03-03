@@ -2,91 +2,102 @@
 #define INC_01_SOLVER_HPP
 
 #include <algorithm>
+
 #include "Chessboard.hpp"
 #include "Move.hpp"
 
 class Solver {
 public:
+    Solver(unsigned long maxDepth) : maxDepth(maxDepth) {}
+
     void solve(const Chessboard &chessboard) {
-        std::cout << "lmao" << std::endl;
-        recursion(0, true, chessboard);
-    }
+        std::cout << chessboard;
+        std::cout << " --- --- --- " << std::endl;
+        recursion(0, true, chessboard, std::vector<int>());
 
-    void printResult() {
+        std::cout << "WIN in steps: " << bestPrice << std::endl;
+        std::cout << "CALLS: " << calls << std::endl;
+        std::cout << "RET1: " << ret1 << std::endl;
+        std::cout << "RET2: " << ret2 << std::endl;
+        std::cout << "RET3: " << ret3 << std::endl;
+        std::cout << "RET4: " << ret4 << std::endl;
+        std::cout << "MOVES COUNT: " << movesCount << std::endl;
 
+        int turnIndex = 1;
+        for (int move: bestTurnMoves) {
+            std::cout << (turnIndex % 2 == 1 ? 'S' : 'J') << " " << chessboard.indexToCoords(move) << std::endl;
+            turnIndex++;
+        }
+
+        std::cout << std::endl;
     }
 
 private:
-    bool shouldExit = false;
+    unsigned long maxDepth;
+    unsigned long calls = 0;
 
-    // TODO: dolní mez -> q
-    // TODO: horní mez -> jezdec k^2, střelec --
-    // TODO: prořezávání -> akt_hloubka + (q - #_uz_sebranych_figurek) < akt_min
+    unsigned long movesCount = 0;
+    unsigned long ret1 = 0;
+    unsigned long ret2 = 0;
+    unsigned long ret3 = 0;
+    unsigned long ret4 = 0;
 
-    // TODO: akt_min -> ??? jak počítat
+    bool solutionFound = false;
+    unsigned long bestPrice = 0;
+    std::vector<int> bestTurnMoves;
 
-    void recursion(unsigned long depth, bool bishopTurn, Chessboard chessboard, std::vector<int> turnMoves) {
-        if (shouldExit) {
-            std::cout << depth << " - " << turnMoves << std::endl;
+    void recursion(unsigned long depth, bool bishopTurn, const Chessboard &chessboard, const std::vector<int> &turnMoves) {
+        if (chessboard.enemiesCount <= 0) {
+            if (!solutionFound) {
+                solutionFound = true;
+                bestPrice = depth;
+                bestTurnMoves = turnMoves;
+
+                std::cout << " FIRST SOLUTION " << std::endl;
+            } else if (bestPrice > depth) {
+                bestPrice = depth;
+                bestTurnMoves = turnMoves;
+
+                std::cout << " NEW SOLUTION " << std::endl;
+            }
+
+            ret1++;
             return;
         }
 
-        if (depth > 5) shouldExit = true;
+        if (depth >= maxDepth) {
+            ret2++;
+            return;
+        }
 
-        std::vector<Move> moves = getAllMoves(bishopTurn);
+        if (depth + chessboard.enemiesCount >= maxDepth) {
+            ret3++;
+            return;
+        }
+
+        if (solutionFound) {
+            if (depth + chessboard.enemiesCount >= bestPrice) {
+                ret4++;
+                return;
+            }
+        }
+
+        calls++;
+
+        std::vector<Move> moves = chessboard.getAllMoves(bishopTurn);
         std::sort(moves.begin(), moves.end());
 
-        for (Move move: moves) {
+        movesCount += moves.size();
+
+        for (auto &move: moves) {
             Chessboard chessboardForMove = chessboard.clone();
-            captureSquare(chessboardForMove, bishopTurn, move.coords);
+            chessboardForMove.moveToSquare(bishopTurn, move.coords);
 
             std::vector<int> turnMovesForMove = turnMoves;
-            turnMovesForMove.push_back(coordsToIndex(chessboard.size, move.coords));
+            turnMovesForMove.push_back(Chessboard::coordsToIndex(chessboard.size, move.coords));
 
-            recursion(depth + 1, !bishopTurn, chessboardForMove);
+            recursion(depth + 1, !bishopTurn, chessboardForMove, turnMovesForMove);
         }
-
-        std::cout << depth << std::endl;
-    }
-
-    void captureSquare(Chessboard chessboard, bool bishopTurn, Coords coords) const {
-        chessboard.squares[coords.row * chessboard.size + coords.column] = false;
-        chessboard.enemiesCount--;
-
-        if (bishopTurn) {
-            chessboard.bishopPosition = coordsToIndex(chessboard.size, coords);
-        } else {
-            chessboard.knightPosition = coordsToIndex(chessboard.size, coords);
-        }
-    }
-
-    int coordsToIndex(int size, Coords coords) const {
-        return coords.row * size + coords.column;
-    }
-
-    bool canGetSquare(Chessboard chessboard, Coords coords) const {
-        return !(coords.row < 0 || coords.row >= chessboard.size || coords.column < 0 ||
-                 coords.column >= chessboard.size);
-    }
-
-    bool getSquare(Chessboard chessboard, Coords coords) const {
-        return chessboard.squares[coordsToIndex(chessboard.size, coords)];
-    }
-
-    std::vector<Move> getAllMoves(bool bishopTurn) const {
-        if (bishopTurn) {
-            return getAllBishopMoves();
-        }
-
-        return getAllKnightMoves();
-    }
-
-    std::vector<Move> getAllBishopMoves() const {
-        // TODO:
-    }
-
-    std::vector<Move> getAllKnightMoves() const {
-        // TODO:
     }
 };
 
