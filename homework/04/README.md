@@ -1,8 +1,11 @@
-# Homework 4 -- parallel solution using OpenMP with data parallelism
+# Homework 4 -- parallel solution using MPI
 
-Implementation of data parallelism brings neither speed-up nor slowdown.
-However, it should be noted that this solution bring a stable result,
-in comparison with task parallelism.
+This implementation brings a support of distributed memory clusters.
+According to different measurements and different settings,
+the best time solution is shown bellow.
+As we can see,
+distributed memory clusters has its disadvantages due to data passing overhead.
+But some tasks showed equal or even slightly better solution.
 
 | File      | Cost | Reference \[s] | HW 1 | HW 2 #1 | HW 2 #2 | HW 3  | HW 4 n=4  |
 |:----------|-----:|---------------:|-----:|:--------|:--------|:------|:------|
