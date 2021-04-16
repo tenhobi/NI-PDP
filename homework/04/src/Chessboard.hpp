@@ -86,6 +86,12 @@ public:
         return coords.row * size + coords.column;
     }
 
+    static Coords indexToCoords(int size, int index) {
+        int column = index % size;
+        int row = index / size;
+        return Coords(row, column);
+    }
+
     Coords currentPlayerPosition(bool bishopTurn) const {
         if (bishopTurn) {
             return indexToCoords(bishopPosition);

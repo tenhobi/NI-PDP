@@ -15,8 +15,6 @@
 #define TAG_DO_TASK 1
 #define TAG_TASK_DONE 2
 #define TAG_KILL 3
-//#define TAG_M_SEND_RESULTS 4
-//#define TAG_S_RESULTS_SENT 5
 
 class Solver {
 public:
@@ -27,21 +25,34 @@ public:
         MPI_Comm_rank(MPI_COMM_WORLD, &procNum);
         MPI_Comm_size(MPI_COMM_WORLD, &procCount);
 
-        if (procNum == 0) {
+        taskBufferSize = 4 + 200 + maxDepth + 2 + 5;
+        resultBufferSize = 1 + maxDepth + 1 + 5;
+
+        if (procNum == SOURCE_MASTER) {
+            std::cout << "master id=" << procNum << std::endl;
             master(chessboard, procCount);
         } else {
-            slave();
+            std::cout << "slave id=" << procNum << std::endl;
+            slave(chessboard.size, procCount);
         }
     }
 
 private:
+    int maxDepth;
+    unsigned long calls = 0;
+
+    int bestPrice = std::numeric_limits<int>::max();
+    std::vector<int> bestTurnMoves;
+
+    int taskBufferSize;
+    int resultBufferSize;
+
     void master(Chessboard &chessboard, int procCount) {
         int workerCount = procCount - 1;
 
         // Generate initial master states.
         std::vector<State> states;
-        states = generateBoard(chessboard, std::thread::hardware_concurrency() * 1000, 4);
-        std::cout << "States generated: " << states.size() << std::endl;
+        states = generateBoard(chessboard, procCount * 5, 5);
         std::queue<State> queue;
 
         for (auto &elem : states) {
@@ -51,24 +62,33 @@ private:
 
         // Send initial task
         for (int i = 1; i <= workerCount && !queue.empty(); i++) {
-            // TODO
+            State task = queue.front();
+            queue.pop();
+            std::vector<int> serialized = task.serializeTask(bestPrice);
+            MPI_Send(serialized.data(), (int) serialized.size(), MPI_INT, i, TAG_DO_TASK, MPI_COMM_WORLD);
         }
 
         while (workerCount > 0) {
-            // --- RESULT
-            // bestPrice
-            // turn moves [] array ... max maxDepth
-            // ---- -1 if array ended
-            // +1 for -1 arrays' endings
-            // +5 additional just for sure
-            int bufferSize = 4 + 200 + maxDepth + 2 + 5;
-            std::vector<int> buffer(bufferSize);
+            std::vector<int> buffer(resultBufferSize);
             MPI_Status status;
-            MPI_Recv(buffer.data(), bufferSize, MPI_INT, SOURCE_MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(buffer.data(), resultBufferSize, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
             if (status.MPI_TAG == TAG_TASK_DONE) {
-                // TODO: process data, update etc.
+                if (buffer[0] < bestPrice) {
+                    bestPrice = buffer[0];
 
+                    std::vector<int> newBestTurnsMoves;
+                    for (int i = 1; i < resultBufferSize; i++) {
+                        int val = buffer[i];
+                        if (val == -1) {
+                            break;
+                        }
+                        newBestTurnsMoves.push_back(val);
+                    }
+                    bestTurnMoves = newBestTurnsMoves;
+                }
+
+                // If there is no more job, kill this slave process.
                 if (queue.empty()) {
                     int nothing = 0;
                     MPI_Send(&nothing, 1, MPI_INT, status.MPI_SOURCE, TAG_KILL, MPI_COMM_WORLD);
@@ -76,51 +96,36 @@ private:
                     continue;
                 }
 
-                // --- DATA
-                // currentBestPrice
-                // chessboardSize
-                // depth
-                // bishop position
-                // knight position
-                // pawns positions [] array ... max 200
-                // turn moves [] array ... max maxDepth
-                // ---- -1 if array ended
-                // +2 for -1 arrays' endings
-                // +5 additional just for sure
-                int taskBufferSize = 5 + 200 + maxDepth + 2 + 5;
-                std::vector<int> taskBuffer(taskBufferSize);
-                MPI_Status taskStatus;
-                // TODO: send another task
-                int nothing = 0;
-                MPI_Send(&nothing, 1, MPI_INT, status.MPI_SOURCE, TAG_DO_TASK, MPI_COMM_WORLD);
-            } else {
-                std::cout << "WTF??" << std::endl;
+                // Otherwise send another task.
+                State task = queue.front();
+                queue.pop();
+                std::vector<int> serialized = task.serializeTask(bestPrice);
+                MPI_Send(serialized.data(), (int) serialized.size(), MPI_INT, status.MPI_SOURCE, TAG_DO_TASK,
+                         MPI_COMM_WORLD);
             }
         }
 
-        // TODO
+        std::cout << std::endl;
+        std::cout << "Price: " << bestPrice << std::endl;
+        std::cout << "Number of calls: " << calls << std::endl;
+        std::cout << "Turns:" << std::endl;
 
+        int turnIndex = 1;
+        for (int move: bestTurnMoves) {
+            Coords moveCoords = chessboard.indexToCoords(move);
+            std::cout << (turnIndex % 2 == 1 ? 'S' : 'J') << " -> " << moveCoords
+                      << (chessboard.getSquare(moveCoords) ? '*' : ' ') << std::endl;
+            turnIndex++;
+            chessboard.setSquare(chessboard.indexToCoords(move), false);
+        }
     }
 
-    void slave() {
-        // --- DATA
-        // currentBestPrice
-        // chessboardSize
-        // depth
-        // bishop position
-        // knight position
-        // pawns positions [] array ... max 200
-        // turn moves [] array ... max maxDepth
-        // ---- -1 if array ended
-        // +2 for -1 arrays' endings
-        // +5 additional just for sure
-        int bufferSize = 5 + 200 + maxDepth + 2 + 5;
-
+    void slave(int chessboardSize, int procCount) {
         while (true) {
-            // Read data
-            std::vector<int> buffer(bufferSize);
+            // Read task data
+            std::vector<int> buffer(taskBufferSize);
             MPI_Status status;
-            MPI_Recv(buffer.data(), bufferSize, MPI_INT, SOURCE_MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(buffer.data(), taskBufferSize, MPI_INT, SOURCE_MASTER, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 
             // End processing.
             if (status.MPI_TAG == TAG_KILL) {
@@ -129,54 +134,46 @@ private:
 
             // Process received task.
             if (status.MPI_TAG == TAG_DO_TASK) {
-                // TODO: parse received data
+                State newState = State::parseSerializedTask(buffer, chessboardSize);
 
                 std::vector<State> states;
-                states = generateBoard(chessboard, std::thread::hardware_concurrency() * 1000, taskDepth + 4);
+                states = generateBoard(newState.chessboard, std::thread::hardware_concurrency() * 1000,newState.depth + 5, newState.depth);
 
                 #pragma omp parallel for schedule(dynamic) default(none) shared(states)
                 for (auto &state : states) {
                     recursionSeq(state);
                 }
 
-                // std::cout << "Price: " << bestPrice << std::endl;
-                // std::cout << "Number of calls: " << calls << std::endl;
-                // std::cout << "Turns:" << std::endl;
-
-                int turnIndex = 1;
-                for (int move: bestTurnMoves) {
-                    Coords moveCoords = chessboard.indexToCoords(move);
-                    std::cout << (turnIndex % 2 == 1 ? 'S' : 'J') << " -> " << moveCoords
-                              << (chessboard.getSquare(moveCoords) ? '*' : ' ') << std::endl;
-                    turnIndex++;
-                }
-                
-                // --- RESULT
-                // bestPrice
-                // turn moves [] array ... max maxDepth
-                // ---- -1 if array ended
-                // +1 for -1 arrays' endings
-                // +5 additional just for sure
-                int outputBufferSize = 1 + maxDepth + 1 + 5;
-                std::vector<int> outputBuffer(outputBufferSize);
-                // TODO: serialize data to output buffer
-                int nothing = 0;
-                MPI_Send(&nothing, 1, MPI_INT, status.MPI_SOURCE, TAG_TASK_DONE, MPI_COMM_WORLD);
+                std::vector<int> serializedResult = serializeResult(bestPrice, bestTurnMoves);
+                MPI_Send(serializedResult.data(), (int) serializedResult.size(), MPI_INT, SOURCE_MASTER, TAG_TASK_DONE,
+                         MPI_COMM_WORLD);
             }
         }
     }
 
-    int maxDepth;
-    unsigned long calls = 0;
+    // --- RESULT
+    // bestPrice
+    // turn moves [] array ... max maxDepth
+    // ---- -1 if array ended
+    // +1 for -1 arrays' endings
+    std::vector<int> serializeResult(int price, std::vector<int> turnMoves) {
+        std::vector<int> buffer;
 
-    int bestPrice = std::numeric_limits<int>::max();
-    std::vector<int> bestTurnMoves;
+        buffer.push_back(price);
 
-    std::vector<State> generateBoard(Chessboard &chessboard, unsigned int count, int depthLimit) {
+        for (const auto &item : turnMoves) {
+            buffer.push_back(item);
+        }
+        buffer.push_back(-1);
+
+        return buffer;
+    }
+
+    std::vector<State> generateBoard(Chessboard &chessboard, unsigned int count, int depthLimit, int currentDepth = 0) {
         std::vector<State> states; // output vector
 
         std::queue<State> statesQueue;
-        State x = State(0, chessboard.clone(), std::vector<int>());
+        State x = State(currentDepth, chessboard.clone(), std::vector<int>());
         statesQueue.push(x);
 
         while (statesQueue.size() < count) {

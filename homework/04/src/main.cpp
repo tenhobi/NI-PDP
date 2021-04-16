@@ -4,7 +4,6 @@
 
 #include "Parser.hpp"
 #include "Solver.hpp"
-#include "Worker.hpp"
 
 int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
